@@ -12,8 +12,10 @@ from transformers import (
 )
 from trl import SFTTrainer, SFTConfig
 from peft import LoraConfig, get_peft_model
+import sys
 
 # 从 config 文件读取超参
+sys.path.append("D:\llm-reasoning-qlora")
 from configs import qlora_config as cfg
 
 
