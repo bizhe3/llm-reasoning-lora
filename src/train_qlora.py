@@ -104,6 +104,9 @@ def main():
     model = get_peft_model(model, lora_config)
     model.print_trainable_parameters()
 
+    use_bf16 = torch.cuda.is_available() and torch.cuda.is_bf16_supported()
+    use_fp16 = torch.cuda.is_available() and not use_bf16
+
     # TRL 的 SFTConfig
     training_args = SFTConfig(
         output_dir=str(OUTPUT_DIR),
@@ -114,8 +117,8 @@ def main():
         logging_steps=cfg.LOGGING_STEPS,
         save_strategy=cfg.SAVE_STRATEGY,
         max_length=cfg.MAX_SEQ_LENGTH,
-        fp16=torch.cuda.is_available(),  # 有 GPU 就用 fp16
-        bf16=torch.cuda.is_bf16_supported() if torch.cuda.is_available() else False,
+        ffp16=use_fp16,   # ✅ 两者互斥
+        bf16=use_bf16,   # ✅ 两者互斥
         report_to=[],  # 不用 wandb 等
     )
 
