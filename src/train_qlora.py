@@ -127,10 +127,10 @@ def main():
 
     trainer = SFTTrainer(
         model=model,
-        tokenizer=tokenizer,
-        train_dataset=dataset,
         args=training_args,
+        train_dataset=dataset,
         formatting_func=formatting_func,
+        processing_class=tokenizer, 
     )
 
     print("Start training...")
