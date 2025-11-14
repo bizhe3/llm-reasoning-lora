@@ -1,0 +1,9 @@
+transformers==4.45.0
+datasets
+accelerate
+bitsandbytes
+peft
+trl
+torch
+sentencepiece
+einops

@@ -1,0 +1,24 @@
+# 忽略大文件数据集
+data/raw/Open-Orca.jsonl
+data/raw/*
+*.jsonl
+
+# 忽略模型输出 / 检查点
+outputs/
+checkpoints/
+*.pt
+*.bin
+*.safetensors
+
+# 忽略 Python 编译文件
+__pycache__/
+*.pyc
+
+# 忽略 IDE 配置
+.vscode/
+.idea/
+
+# 忽略虚拟环境
+venv/
+env/
+.venv/
