@@ -2,6 +2,8 @@ import os
 import json
 from dataclasses import dataclass, field
 from typing import Optional, Dict, Any, List
+from pathlib import Path
+import sys
 
 import torch
 from datasets import load_dataset
@@ -12,21 +14,21 @@ from transformers import (
 )
 from trl import SFTTrainer, SFTConfig
 from peft import LoraConfig, get_peft_model
-import sys
 
-# 从 config 文件读取超参
-sys.path.append("D:\llm-reasoning-qlora")
+# ========= 1. 统一设置项目根目录（本地 / Colab 都适用） =========
+# 当前文件: <repo_root>/src/train_qlora.py
+PROJECT_ROOT = Path(__file__).resolve().parents[1]  # 上上级目录 = 仓库根目录
+sys.path.append(str(PROJECT_ROOT))  # 让 Python 能够找到 configs 包
+
 from configs import qlora_config as cfg
 
-
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DATA_PATH = os.path.join(BASE_DIR, cfg.DATA_PATH)
-OUTPUT_DIR = os.path.join(BASE_DIR, cfg.OUTPUT_DIR)
+DATA_PATH = PROJECT_ROOT / cfg.DATA_PATH          # e.g. data/processed/merged_instructions.jsonl
+OUTPUT_DIR = PROJECT_ROOT / cfg.OUTPUT_DIR        # e.g. outputs/qlora-qwen2.5-7b-sft
 
 
 def load_merged_dataset():
     """从 jsonl 加载 merged 数据集"""
-    dataset = load_dataset("json", data_files=DATA_PATH, split="train")
+    dataset = load_dataset("json", data_files=str(DATA_PATH), split="train")
 
     # 可选：只取前 N 条做 sanity run
     if cfg.MAX_TRAIN_SAMPLES is not None:
@@ -64,20 +66,23 @@ def format_example(example: Dict[str, Any], tokenizer) -> str:
 
 def main():
     os.makedirs(OUTPUT_DIR, exist_ok=True)
+    print("PROJECT_ROOT:", PROJECT_ROOT)
     print("Loading dataset from:", DATA_PATH)
+
     dataset = load_merged_dataset()
 
     print("Loading tokenizer and base model:", cfg.BASE_MODEL)
     tokenizer = AutoTokenizer.from_pretrained(cfg.BASE_MODEL)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
+    tokenizer.padding_side = "right"
 
-    # QLoRA: 4-bit 量化配置
+    # QLoRA: 4-bit 量化配置（Colab 一般用 float16 更稳）
     bnb_config = BitsAndBytesConfig(
         load_in_4bit=True,
         bnb_4bit_use_double_quant=True,
         bnb_4bit_quant_type="nf4",
-        bnb_4bit_compute_dtype=torch.bfloat16,
+        bnb_4bit_compute_dtype=torch.float16,   # T4 / L4 上用 fp16 更通用
     )
 
     model = AutoModelForCausalLM.from_pretrained(
@@ -101,7 +106,7 @@ def main():
 
     # TRL 的 SFTConfig
     training_args = SFTConfig(
-        output_dir=OUTPUT_DIR,
+        output_dir=str(OUTPUT_DIR),
         num_train_epochs=cfg.NUM_EPOCHS,
         per_device_train_batch_size=cfg.PER_DEVICE_BATCH_SIZE,
         gradient_accumulation_steps=cfg.GRAD_ACCUM_STEPS,
@@ -128,8 +133,8 @@ def main():
     print("Start training...")
     trainer.train()
     print("Training finished. Saving model to:", OUTPUT_DIR)
-    trainer.save_model(OUTPUT_DIR)
-    tokenizer.save_pretrained(OUTPUT_DIR)
+    trainer.save_model(str(OUTPUT_DIR))
+    tokenizer.save_pretrained(str(OUTPUT_DIR))
 
 
 if __name__ == "__main__":
