@@ -117,7 +117,7 @@ def main():
         logging_steps=cfg.LOGGING_STEPS,
         save_strategy=cfg.SAVE_STRATEGY,
         max_length=cfg.MAX_SEQ_LENGTH,
-        ffp16=use_fp16,   # ✅ 两者互斥
+        fp16=use_fp16,   # ✅ 两者互斥
         bf16=use_bf16,   # ✅ 两者互斥
         report_to=[],  # 不用 wandb 等
     )
