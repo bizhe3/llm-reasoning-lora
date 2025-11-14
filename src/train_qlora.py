@@ -1,7 +1,5 @@
 import os
-import json
-from dataclasses import dataclass, field
-from typing import Optional, Dict, Any, List
+from typing import Dict, Any
 from pathlib import Path
 import sys
 
@@ -20,7 +18,7 @@ from peft import LoraConfig, get_peft_model
 PROJECT_ROOT = Path(__file__).resolve().parents[1]  # 上上级目录 = 仓库根目录
 sys.path.append(str(PROJECT_ROOT))  # 让 Python 能够找到 configs 包
 
-from configs import qlora_config as cfg
+from configs import qlora_config as cfg  # noqa: E402
 
 DATA_PATH = PROJECT_ROOT / cfg.DATA_PATH          # e.g. data/processed/merged_instructions.jsonl
 OUTPUT_DIR = PROJECT_ROOT / cfg.OUTPUT_DIR        # e.g. outputs/qlora-qwen2.5-7b-sft
@@ -42,8 +40,8 @@ def load_merged_dataset():
 
 def format_example(example: Dict[str, Any], tokenizer) -> str:
     """
-    把我们自己的 schema 转成一个字符串 prompt
-    对 Qwen2.5-Instruct，用 chat template 会更贴合它的风格
+    把我们自己的 schema 转成一个字符串 prompt。
+    对 Qwen2.5-Instruct，用 chat template 会更贴合它的风格。
     """
     instruction = example.get("instruction", "")
     inp = example.get("input", "")
@@ -60,7 +58,7 @@ def format_example(example: Dict[str, Any], tokenizer) -> str:
         {"role": "assistant", "content": output},
     ]
 
-    # 不在这里 tokenize，交给 SFTTrainer 处理
+    # SFTTrainer 会负责 tokenize，这里只返回纯字符串
     return tokenizer.apply_chat_template(messages, tokenize=False)
 
 
@@ -104,10 +102,12 @@ def main():
     model = get_peft_model(model, lora_config)
     model.print_trainable_parameters()
 
+    # ===== 精度设置：bf16 优先，其次 fp16（只能开一个） =====
     use_bf16 = torch.cuda.is_available() and torch.cuda.is_bf16_supported()
     use_fp16 = torch.cuda.is_available() and not use_bf16
+    print(f"use_fp16 = {use_fp16}, use_bf16 = {use_bf16}")
 
-    # TRL 的 SFTConfig
+    # ===== TRL 的 SFTConfig（相当于新版 TrainingArguments） =====
     training_args = SFTConfig(
         output_dir=str(OUTPUT_DIR),
         num_train_epochs=cfg.NUM_EPOCHS,
@@ -116,21 +116,25 @@ def main():
         learning_rate=cfg.LEARNING_RATE,
         logging_steps=cfg.LOGGING_STEPS,
         save_strategy=cfg.SAVE_STRATEGY,
-        max_length=cfg.MAX_SEQ_LENGTH,
-        fp16=use_fp16,   # ✅ 两者互斥
-        bf16=use_bf16,   # ✅ 两者互斥
-        report_to=[],  # 不用 wandb 等
+        max_length=cfg.MAX_SEQ_LENGTH,  # 新版在 SFTConfig 里用 max_length 控制截断
+        fp16=use_fp16,
+        bf16=use_bf16,
+        report_to=[],                   # 不用 wandb 等
+        # 你也可以在这里加 packing / assistant_only_loss 等 TRL 新参数
+        # packing=False,
     )
 
-    def formatting_func(batch: List[Dict[str, Any]]) -> List[str]:
-        return [format_example(ex, tokenizer) for ex in batch]
+    # ===== 新版 TRL：formatting_func 接收单条 example，返回字符串 =====
+    def formatting_func(example: Dict[str, Any]) -> str:
+        return format_example(example, tokenizer)
 
+    # ===== 新版 TRL：用 processing_class 代替 tokenizer =====
     trainer = SFTTrainer(
         model=model,
         args=training_args,
         train_dataset=dataset,
         formatting_func=formatting_func,
-        processing_class=tokenizer, 
+        processing_class=tokenizer,  # 0.12+ 起 tokenizer 参数更名为 processing_class
     )
 
     print("Start training...")
