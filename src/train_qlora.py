@@ -113,7 +113,7 @@ def main():
         learning_rate=cfg.LEARNING_RATE,
         logging_steps=cfg.LOGGING_STEPS,
         save_strategy=cfg.SAVE_STRATEGY,
-        max_seq_length=cfg.MAX_SEQ_LENGTH,
+        max_length=cfg.MAX_SEQ_LENGTH,
         fp16=torch.cuda.is_available(),  # 有 GPU 就用 fp16
         bf16=torch.cuda.is_bf16_supported() if torch.cuda.is_available() else False,
         report_to=[],  # 不用 wandb 等
